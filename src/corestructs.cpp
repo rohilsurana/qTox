@@ -4,7 +4,7 @@
 #include <QFile>
 #include <QRegularExpression>
 
-#define TOX_ID_LENGTH 2*TOX_FRIEND_ADDRESS_SIZE
+#define TOX_ID_LENGTH 2*TOX_ADDRESS_SIZE
 
 ToxFile::ToxFile(int FileNum, int FriendId, QByteArray FileName, QString FilePath, FileDirection Direction)
     : fileNum(FileNum), friendId(FriendId), fileName{FileName}, filePath{FilePath}, file{new QFile(filePath)},

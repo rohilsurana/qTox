@@ -33,7 +33,7 @@
 #include <QThread>
 
 void Core::setPassword(QString& password, PasswordType passtype, uint8_t* salt)
-{
+{/*
     clearPassword(passtype);
     if (password.isEmpty())
         return;
@@ -46,18 +46,18 @@ void Core::setPassword(QString& password, PasswordType passtype, uint8_t* salt)
     else
         tox_derive_key_from_pass(str.data(), str.size(), pwsaltedkeys[passtype]);
 
-    password.clear();
+    password.clear();*/
 }
 
 #include <algorithm>
 void Core::useOtherPassword(PasswordType type)
-{
+{/*
     clearPassword(type);
     pwsaltedkeys[type] = new uint8_t[tox_pass_key_length()];
 
     PasswordType other = (type == ptMain) ? ptHistory : ptMain;
 
-    std::copy(pwsaltedkeys[other], pwsaltedkeys[other]+tox_pass_key_length(), pwsaltedkeys[type]);
+    std::copy(pwsaltedkeys[other], pwsaltedkeys[other]+tox_pass_key_length(), pwsaltedkeys[type]);*/
 }
 
 void Core::clearPassword(PasswordType passtype)
@@ -68,7 +68,7 @@ void Core::clearPassword(PasswordType passtype)
 
 // part of a hack, see core.h
 void Core::saveCurrentInformation()
-{
+{/*
     if (pwsaltedkeys[ptMain])
     {
         backupkeys[ptMain] = new uint8_t[tox_pass_key_length()];
@@ -79,11 +79,11 @@ void Core::saveCurrentInformation()
         backupkeys[ptHistory] = new uint8_t[tox_pass_key_length()];
         std::copy(pwsaltedkeys[ptHistory], pwsaltedkeys[ptHistory]+tox_pass_key_length(), backupkeys[ptHistory]);
     }
-    backupProfile = new QString(Settings::getInstance().getCurrentProfile());
+    backupProfile = new QString(Settings::getInstance().getCurrentProfile());*/
 }
 
 QString Core::loadOldInformation()
-{
+{/*
     QString out;
     if (backupProfile)
     {
@@ -100,11 +100,11 @@ QString Core::loadOldInformation()
     pwsaltedkeys[ptHistory] = backupkeys[ptHistory];
     backupkeys[ptMain]    = nullptr;
     backupkeys[ptHistory] = nullptr;
-    return out;
+    return out;*/
 }
 
 QByteArray Core::encryptData(const QByteArray& data, PasswordType passtype)
-{
+{/*
     if (!pwsaltedkeys[passtype])
         return QByteArray();
     uint8_t encrypted[data.size() + tox_pass_encryption_extra_length()];
@@ -113,11 +113,11 @@ QByteArray Core::encryptData(const QByteArray& data, PasswordType passtype)
         qWarning() << "Core::encryptData: encryption failed";
         return QByteArray();
     }
-    return QByteArray(reinterpret_cast<char*>(encrypted), data.size() + tox_pass_encryption_extra_length());
+    return QByteArray(reinterpret_cast<char*>(encrypted), data.size() + tox_pass_encryption_extra_length());*/
 }
 
 QByteArray Core::decryptData(const QByteArray& data, PasswordType passtype)
-{
+{/*
     if (!pwsaltedkeys[passtype])
         return QByteArray();
     int sz = data.size() - tox_pass_encryption_extra_length();
@@ -128,7 +128,7 @@ QByteArray Core::decryptData(const QByteArray& data, PasswordType passtype)
         qWarning() << "Core::decryptData: decryption failed";
         return QByteArray();
     }
-    return QByteArray(reinterpret_cast<char*>(decrypted), sz);
+    return QByteArray(reinterpret_cast<char*>(decrypted), sz);*/
 }
 
 bool Core::isPasswordSet(PasswordType passtype)
@@ -140,7 +140,7 @@ bool Core::isPasswordSet(PasswordType passtype)
 }
 
 QByteArray Core::getSaltFromFile(QString filename)
-{
+{/*
     QFile file(filename);
     if (!file.open(QIODevice::ReadOnly))
     {
@@ -160,11 +160,11 @@ QByteArray Core::getSaltFromFile(QString filename)
 
     QByteArray res = QByteArray::fromRawData(reinterpret_cast<const char*>(salt), tox_pass_salt_length());
     delete[] salt;
-    return res;
+    return res;*/
 }
 
 bool Core::loadEncryptedSave(QByteArray& data)
-{
+{/*
     if (!Settings::getInstance().getEncryptTox())
         GUI::showWarning(tr("Encryption error"), tr("The .tox file is encrypted, but encryption was not checked, continuing regardless."));
 
@@ -206,11 +206,11 @@ bool Core::loadEncryptedSave(QByteArray& data)
     } while (error != 0);
 
     Settings::getInstance().setEncryptTox(true);
-    return true;
+    return true;*/
 }
 
 void Core::checkEncryptedHistory()
-{
+{/*
     QString path = HistoryKeeper::getHistoryPath();
     bool exists = QFile::exists(path);
 
@@ -268,11 +268,11 @@ void Core::checkEncryptedHistory()
 
         error = exists && !HistoryKeeper::checkPassword();
         dialogtxt = a + "\n" + c + "\n" + b;
-    } while (error);
+    } while (error);*/
 }
 
 void Core::saveConfiguration(const QString& path)
-{
+{/*
     if (QThread::currentThread() != coreThread)
         return (void) QMetaObject::invokeMethod(this, "saveConfiguration", Q_ARG(const QString&, path));
 
@@ -326,5 +326,5 @@ void Core::saveConfiguration(const QString& path)
         delete[] data;
     }
 
-    Settings::getInstance().save();
+    Settings::getInstance().save();*/
 }

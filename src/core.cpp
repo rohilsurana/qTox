@@ -145,13 +145,16 @@ void Core::make_tox()
     else
         qWarning() << "Core starting with IPv6 disabled. LAN discovery may not work properly.";
 
-    Tox_Options toxOptions;
-    toxOptions.ipv6enabled = enableIPv6;
-    toxOptions.udp_disabled = forceTCP;
+    struct Tox_Options toxOptions;
+    tox_options_default(&toxOptions);
+    toxOptions.ipv6_enabled = enableIPv6;
+    toxOptions.udp_enabled = !forceTCP;
 
     // No proxy by default
-    toxOptions.proxy_type = TOX_PROXY_NONE;
-    toxOptions.proxy_address[0] = 0;
+    toxOptions.proxy_type = TOX_PROXY_TYPE_NONE;
+    uint8_t proxy_address[256];
+    toxOptions.proxy_host = (const char*)proxy_address;
+    proxy_address[0] = 0;
     toxOptions.proxy_port = 0;
 
     if (proxyType != ProxyType::ptNone)
@@ -168,25 +171,26 @@ void Core::make_tox()
             qDebug() << "Core: using proxy" << proxyAddr << ":" << proxyPort;
             // protection against changings in TOX_PROXY_TYPE enum
             if (proxyType == ProxyType::ptSOCKS5)
-                toxOptions.proxy_type = TOX_PROXY_SOCKS5;
+                toxOptions.proxy_type = TOX_PROXY_TYPE_SOCKS5;
             else if (proxyType == ProxyType::ptHTTP)
-                toxOptions.proxy_type = TOX_PROXY_HTTP;
-            uint16_t sz = CString::fromString(proxyAddr, (unsigned char*)toxOptions.proxy_address);
-            toxOptions.proxy_address[sz] = 0;
+                toxOptions.proxy_type = TOX_PROXY_TYPE_HTTP;
+            uint16_t sz = CString::fromString(proxyAddr, (unsigned char*)proxy_address);
+            proxy_address[sz] = 0;
             toxOptions.proxy_port = proxyPort;
         }
     }
 
-    tox = tox_new(&toxOptions);
+    tox = tox_new(&toxOptions, 0, 0, 0); /* TODO: use error param */
+
     if (tox == nullptr)
     {
         if (enableIPv6) // Fallback to IPv4
         {
-            toxOptions.ipv6enabled = false;
-            tox = tox_new(&toxOptions);
+            toxOptions.ipv6_enabled = false;
+            tox = tox_new(&toxOptions, 0, 0, 0);
             if (tox == nullptr)
             {
-                if (toxOptions.proxy_type != TOX_PROXY_NONE)
+                if (toxOptions.proxy_type != TOX_PROXY_TYPE_NONE)
                 {
                     qCritical() << "Core: bad proxy! no toxcore!";
                     emit badProxy();
@@ -199,9 +203,9 @@ void Core::make_tox()
                 return;
             }
             else
-                qWarning() << "Core failed to start with IPv6, falling back to IPv4. LAN discovery may not work properly.";
+                qWarning() << "Core failed to start with IPv6, falling back to IPv4.";
         }
-        else if (toxOptions.proxy_type != TOX_PROXY_NONE)
+        else if (toxOptions.proxy_type != TOX_PROXY_TYPE_NONE)
         {
             emit badProxy();
             return;
@@ -266,23 +270,22 @@ void Core::start()
 
     tox_callback_friend_request(tox, onFriendRequest, this);
     tox_callback_friend_message(tox, onFriendMessage, this);
-    tox_callback_friend_action(tox, onAction, this);
-    tox_callback_name_change(tox, onFriendNameChange, this);
-    tox_callback_typing_change(tox, onFriendTypingChange, this);
-    tox_callback_status_message(tox, onStatusMessageChanged, this);
-    tox_callback_user_status(tox, onUserStatusChanged, this);
-    tox_callback_connection_status(tox, onConnectionStatusChanged, this);
+    tox_callback_friend_name(tox, onFriendNameChange, this);
+    tox_callback_friend_typing(tox, onFriendTypingChange, this);
+    tox_callback_friend_status_message(tox, onStatusMessageChanged, this);
+    tox_callback_friend_status(tox, onUserStatusChanged, this);
+    tox_callback_friend_connection_status(tox, onConnectionStatusChanged, this);
     tox_callback_group_invite(tox, onGroupInvite, this);
     tox_callback_group_message(tox, onGroupMessage, this);
     tox_callback_group_namelist_change(tox, onGroupNamelistChange, this);
     tox_callback_group_title(tox, onGroupTitleChange, this);
     tox_callback_group_action(tox, onGroupAction, this);
-    tox_callback_file_send_request(tox, onFileSendRequestCallback, this);
-    tox_callback_file_control(tox, onFileControlCallback, this);
-    tox_callback_file_data(tox, onFileDataCallback, this);
-    tox_callback_avatar_info(tox, onAvatarInfoCallback, this);
-    tox_callback_avatar_data(tox, onAvatarDataCallback, this);
-    tox_callback_read_receipt(tox, onReadReceiptCallback, this);
+    //tox_callback_file_send_request(tox, onFileSendRequestCallback, this);
+    //tox_callback_file_control(tox, onFileControlCallback, this);
+    //tox_callback_file_data(tox, onFileDataCallback, this);
+    //tox_callback_avatar_info(tox, onAvatarInfoCallback, this);
+    //tox_callback_avatar_data(tox, onAvatarDataCallback, this);
+    tox_callback_friend_read_receipt(tox, onReadReceiptCallback, this);
 
     toxav_register_callstate_callback(toxav, onAvInvite, av_OnInvite, this);
     toxav_register_callstate_callback(toxav, onAvStart, av_OnStart, this);
@@ -331,7 +334,7 @@ void Core::process()
         return;
 
     static int tolerance = CORE_DISCONNECT_TOLERANCE;
-    tox_do(tox);
+    tox_iterate(tox);
     toxav_do(toxav);
 
 #ifdef DEBUG
@@ -347,14 +350,14 @@ void Core::process()
         tolerance = 3*CORE_DISCONNECT_TOLERANCE;
     }
 
-    toxTimer->start(qMin(tox_do_interval(tox), toxav_do_interval(toxav)));
+    toxTimer->start(qMin(tox_iteration_interval(tox), toxav_do_interval(toxav)));
 }
 
 bool Core::checkConnection()
 {
     static bool isConnected = false;
     //static int count = 0;
-    bool toxConnected = tox_isconnected(tox);
+    bool toxConnected = !!tox_self_get_connection_status(tox);
 
     if (toxConnected && !isConnected) {
         qDebug() << "Core: Connected to DHT";
@@ -390,8 +393,8 @@ void Core::bootstrapDht()
     while (i < 2) // i think the more we bootstrap, the more we jitter because the more we overwrite nodes
     {
         const Settings::DhtServer& dhtServer = dhtServerList[j % listSize];
-        if (tox_bootstrap_from_address(tox, dhtServer.address.toLatin1().data(),
-            dhtServer.port, CUserId(dhtServer.userId).data()) == 1)
+        if (tox_bootstrap(tox, dhtServer.address.toLatin1().data(),
+            dhtServer.port, CUserId(dhtServer.userId).data(), 0) == 1)
             qDebug() << QString("Core: Bootstrapping from ")+dhtServer.name+QString(", addr ")+dhtServer.address.toLatin1().data()
                         +QString(", port ")+QString().setNum(dhtServer.port);
         else
@@ -402,42 +405,42 @@ void Core::bootstrapDht()
     }
 }
 
-void Core::onFriendRequest(Tox*/* tox*/, const uint8_t* cUserId, const uint8_t* cMessage, uint16_t cMessageSize, void* core)
+void Core::onFriendRequest(Tox*/* tox*/, const uint8_t* cUserId, const uint8_t* cMessage, size_t cMessageSize, void* core)
 {
     emit static_cast<Core*>(core)->friendRequestReceived(CUserId::toString(cUserId), CString::toString(cMessage, cMessageSize));
 }
 
-void Core::onFriendMessage(Tox*/* tox*/, int friendId, const uint8_t* cMessage, uint16_t cMessageSize, void* core)
+void Core::onFriendMessage(Tox*/* tox*/, uint32_t friendId, TOX_MESSAGE_TYPE type, const uint8_t* cMessage, size_t cMessageSize, void* core)
 {
-    emit static_cast<Core*>(core)->friendMessageReceived(friendId, CString::toString(cMessage, cMessageSize), false);
+    emit static_cast<Core*>(core)->friendMessageReceived(friendId, CString::toString(cMessage, cMessageSize), type == TOX_MESSAGE_TYPE_ACTION);
 }
 
-void Core::onFriendNameChange(Tox*/* tox*/, int friendId, const uint8_t* cName, uint16_t cNameSize, void* core)
+void Core::onFriendNameChange(Tox*/* tox*/, uint32_t friendId, const uint8_t* cName, size_t cNameSize, void* core)
 {
     emit static_cast<Core*>(core)->friendUsernameChanged(friendId, CString::toString(cName, cNameSize));
 }
 
-void Core::onFriendTypingChange(Tox*/* tox*/, int friendId, uint8_t isTyping, void *core)
+void Core::onFriendTypingChange(Tox*/* tox*/, uint32_t friendId, bool isTyping, void* core)
 {
     emit static_cast<Core*>(core)->friendTypingChanged(friendId, isTyping ? true : false);
 }
 
-void Core::onStatusMessageChanged(Tox*/* tox*/, int friendId, const uint8_t* cMessage, uint16_t cMessageSize, void* core)
+void Core::onStatusMessageChanged(Tox*/* tox*/, uint32_t friendId, const uint8_t* cMessage, size_t cMessageSize, void* core)
 {
     emit static_cast<Core*>(core)->friendStatusMessageChanged(friendId, CString::toString(cMessage, cMessageSize));
 }
 
-void Core::onUserStatusChanged(Tox*/* tox*/, int friendId, uint8_t userstatus, void* core)
+void Core::onUserStatusChanged(Tox*/* tox*/, uint32_t friendId, TOX_USER_STATUS userstatus, void* core)
 {
     Status status;
     switch (userstatus) {
-        case TOX_USERSTATUS_NONE:
+        case TOX_USER_STATUS_NONE:
             status = Status::Online;
             break;
-        case TOX_USERSTATUS_AWAY:
+        case TOX_USER_STATUS_AWAY:
             status = Status::Away;
             break;
-        case TOX_USERSTATUS_BUSY:
+        case TOX_USER_STATUS_BUSY:
             status = Status::Busy;
             break;
         default:
@@ -445,16 +448,18 @@ void Core::onUserStatusChanged(Tox*/* tox*/, int friendId, uint8_t userstatus, v
             break;
     }
 
-    if (status == Status::Online || status == Status::Away)
-        tox_request_avatar_info(static_cast<Core*>(core)->tox, friendId);
+    //if (status == Status::Online || status == Status::Away)
+    //    tox_request_avatar_info(static_cast<Core*>(core)->tox, friendId);
 
     emit static_cast<Core*>(core)->friendStatusChanged(friendId, status);
 }
 
-void Core::onConnectionStatusChanged(Tox*/* tox*/, int friendId, uint8_t status, void* core)
-{
+void Core::onConnectionStatusChanged(Tox*/* tox*/,  uint32_t friendId, TOX_CONNECTION status, void* core)
+{ //TODO: status can change from UDP connected to TCP connected.
+
     Status friendStatus = status ? Status::Online : Status::Offline;
     emit static_cast<Core*>(core)->friendStatusChanged(friendId, friendStatus);
+    /*
     if (friendStatus == Status::Offline) {
         static_cast<Core*>(core)->checkLastOnline(friendId);
 
@@ -484,12 +489,7 @@ void Core::onConnectionStatusChanged(Tox*/* tox*/, int friendId, uint8_t status,
                 emit static_cast<Core*>(core)->fileTransferBrokenUnbroken(f, false);
             }
         }
-    }
-}
-
-void Core::onAction(Tox*/* tox*/, int friendId, const uint8_t *cMessage, uint16_t cMessageSize, void *core)
-{
-    emit static_cast<Core*>(core)->friendMessageReceived(friendId, CString::toString(cMessage, cMessageSize), true);
+    }*/
 }
 
 void Core::onGroupAction(Tox*, int groupnumber, int peernumber, const uint8_t *action, uint16_t length, void* _core)
@@ -538,7 +538,7 @@ void Core::onGroupTitleChange(Tox*, int groupnumber, int peernumber, const uint8
         author = core->getGroupPeerName(groupnumber, peernumber);
     emit core->groupTitleChanged(groupnumber, author, CString::toString(title, len));
 }
-
+/*
 void Core::onFileSendRequestCallback(Tox*, int32_t friendnumber, uint8_t filenumber, uint64_t filesize,
                                           const uint8_t *filename, uint16_t filename_length, void *core)
 {
@@ -740,15 +740,15 @@ void Core::onAvatarDataCallback(Tox*, int32_t friendnumber, uint8_t,
         emit static_cast<Core*>(core)->friendAvatarChanged(friendnumber, pic);
     }
 }
-
-void Core::onReadReceiptCallback(Tox*, int32_t friendnumber, uint32_t receipt, void *core)
+*/
+void Core::onReadReceiptCallback(Tox*, uint32_t friendnumber, uint32_t receipt, void *core)
 {
      emit static_cast<Core*>(core)->receiptRecieved(friendnumber, receipt);
 }
 
 void Core::acceptFriendRequest(const QString& userId)
 {
-    int friendId = tox_add_friend_norequest(tox, CUserId(userId).data());
+    int friendId = tox_friend_add_norequest(tox, CUserId(userId).data(), 0);
     if (friendId == -1) {
         emit failedToAddFriend(userId);
     } else {
@@ -770,8 +770,9 @@ void Core::requestFriendship(const QString& friendAddress, const QString& messag
         qDebug() << "Core: requesting friendship of "+friendAddress;
         CString cMessage(message);
 
-        int friendId = tox_add_friend(tox, CFriendAddress(friendAddress).data(), cMessage.data(), cMessage.size());
-        if (friendId < 0)
+        TOX_ERR_FRIEND_ADD f_err;
+        uint32_t friendId = tox_friend_add(tox, CFriendAddress(friendAddress).data(), cMessage.data(), cMessage.size(), &f_err);
+        if (f_err != TOX_ERR_FRIEND_ADD_OK)
         {
             emit failedToAddFriend(userId);
         }
@@ -793,7 +794,7 @@ int Core::sendMessage(int friendId, const QString& message)
 {
     QMutexLocker ml(&messageSendMutex);
     CString cMessage(message);
-    int receipt = tox_send_message(tox, friendId, cMessage.data(), cMessage.size());
+    int receipt = tox_friend_send_message(tox, friendId, TOX_MESSAGE_TYPE_NORMAL, cMessage.data(), cMessage.size(), 0);
     emit messageSentResult(friendId, message, receipt);
     return receipt;
 }
@@ -802,14 +803,14 @@ int Core::sendAction(int friendId, const QString &action)
 {
     QMutexLocker ml(&messageSendMutex);
     CString cMessage(action);
-    int receipt = tox_send_action(tox, friendId, cMessage.data(), cMessage.size());
+    int receipt = tox_friend_send_message(tox, friendId, TOX_MESSAGE_TYPE_ACTION, cMessage.data(), cMessage.size(), 0);
     emit messageSentResult(friendId, action, receipt);
     return receipt;
 }
 
 void Core::sendTyping(int friendId, bool typing)
 {
-    int ret = tox_set_user_is_typing(tox, friendId, typing);
+    int ret = tox_self_set_typing(tox, friendId, typing, 0);
     if (ret == -1)
         emit failedToSetTyping(typing);
 }
@@ -850,6 +851,8 @@ void Core::changeGroupTitle(int groupId, const QString& title)
 
 void Core::sendFile(int32_t friendId, QString Filename, QString FilePath, long long filesize)
 {
+    emit fileSendFailed(friendId, Filename);
+    /*
     QMutexLocker mlocker(&fileSendMutex);
 
     QByteArray fileName = Filename.toUtf8();
@@ -870,11 +873,11 @@ void Core::sendFile(int32_t friendId, QString Filename, QString FilePath, long l
     }
     fileSendQueue.append(file);
 
-    emit fileSendStarted(fileSendQueue.last());
+    emit fileSendStarted(fileSendQueue.last());*/
 }
 
 void Core::pauseResumeFileSend(int friendId, int fileNum)
-{
+{/*
     ToxFile* file{nullptr};
     for (ToxFile& f : fileSendQueue)
     {
@@ -902,11 +905,11 @@ void Core::pauseResumeFileSend(int friendId, int fileNum)
         tox_file_send_control(tox, file->friendId, 0, file->fileNum, TOX_FILECONTROL_ACCEPT, nullptr, 0);
     }
     else
-        qWarning() << "Core::pauseResumeFileSend: File is stopped";
+        qWarning() << "Core::pauseResumeFileSend: File is stopped";*/
 }
 
 void Core::pauseResumeFileRecv(int friendId, int fileNum)
-{
+{/*
     ToxFile* file{nullptr};
     for (ToxFile& f : fileRecvQueue)
     {
@@ -934,11 +937,11 @@ void Core::pauseResumeFileRecv(int friendId, int fileNum)
         tox_file_send_control(tox, file->friendId, 1, file->fileNum, TOX_FILECONTROL_ACCEPT, nullptr, 0);
     }
     else
-        qWarning() << "Core::pauseResumeFileRecv: File is stopped or broken";
+        qWarning() << "Core::pauseResumeFileRecv: File is stopped or broken";*/
 }
 
 void Core::cancelFileSend(int friendId, int fileNum)
-{
+{/*
     ToxFile* file{nullptr};
     for (ToxFile& f : fileSendQueue)
     {
@@ -957,11 +960,11 @@ void Core::cancelFileSend(int friendId, int fileNum)
     emit fileTransferCancelled(*file);
     tox_file_send_control(tox, file->friendId, 0, file->fileNum, TOX_FILECONTROL_KILL, nullptr, 0);
     while (file->sendTimer) QThread::msleep(1); // Wait until sendAllFileData returns before deleting
-    removeFileFromQueue(true, friendId, fileNum);
+    removeFileFromQueue(true, friendId, fileNum);*/
 }
 
 void Core::cancelFileRecv(int friendId, int fileNum)
-{
+{/*
     ToxFile* file{nullptr};
     for (ToxFile& f : fileRecvQueue)
     {
@@ -979,11 +982,11 @@ void Core::cancelFileRecv(int friendId, int fileNum)
     file->status = ToxFile::STOPPED;
     emit fileTransferCancelled(*file);
     tox_file_send_control(tox, file->friendId, 1, file->fileNum, TOX_FILECONTROL_KILL, nullptr, 0);
-    removeFileFromQueue(true, friendId, fileNum);
+    removeFileFromQueue(true, friendId, fileNum);*/
 }
 
 void Core::rejectFileRecvRequest(int friendId, int fileNum)
-{
+{/*
     ToxFile* file{nullptr};
     for (ToxFile& f : fileRecvQueue)
     {
@@ -1001,11 +1004,11 @@ void Core::rejectFileRecvRequest(int friendId, int fileNum)
     file->status = ToxFile::STOPPED;
     emit fileTransferCancelled(*file);
     tox_file_send_control(tox, file->friendId, 1, file->fileNum, TOX_FILECONTROL_KILL, nullptr, 0);
-    removeFileFromQueue(false, friendId, fileNum);
+    removeFileFromQueue(false, friendId, fileNum);*/
 }
 
 void Core::acceptFileRecvRequest(int friendId, int fileNum, QString path)
-{
+{/*
     ToxFile* file{nullptr};
     for (ToxFile& f : fileRecvQueue)
     {
@@ -1028,14 +1031,14 @@ void Core::acceptFileRecvRequest(int friendId, int fileNum, QString path)
     }
     file->status = ToxFile::TRANSMITTING;
     emit fileTransferAccepted(*file);
-    tox_file_send_control(tox, file->friendId, 1, file->fileNum, TOX_FILECONTROL_ACCEPT, nullptr, 0);
+    tox_file_send_control(tox, file->friendId, 1, file->fileNum, TOX_FILECONTROL_ACCEPT, nullptr, 0);*/
 }
 
 void Core::removeFriend(int friendId, bool fake)
 {
     if (!isReady() || fake)
         return;
-    if (tox_del_friend(tox, friendId) == -1) {
+    if (tox_friend_delete(tox, friendId, 0) == -1) {
         emit failedToRemoveFriend(friendId);
     } else {
         saveConfiguration();
@@ -1056,10 +1059,10 @@ void Core::removeGroup(int groupId, bool fake)
 QString Core::getUsername() const
 {
     QString sname;
-    int size = tox_get_self_name_size(tox);
+    int size = tox_self_get_name_size(tox);
     uint8_t* name = new uint8_t[size];
-    if (tox_get_self_name(tox, name) == size)
-        sname = CString::toString(name, size);
+    tox_self_get_name(tox, name);
+    sname = CString::toString(name, size);
     delete[] name;
     return sname;
 }
@@ -1068,7 +1071,7 @@ void Core::setUsername(const QString& username)
 {
     CString cUsername(username);
 
-    if (tox_set_name(tox, cUsername.data(), cUsername.size()) == -1) {
+    if (tox_self_set_name(tox, cUsername.data(), cUsername.size(), 0) == 0) {
         emit failedToSetUsername(username);
     } else {
         emit usernameSet(username);
@@ -1077,7 +1080,7 @@ void Core::setUsername(const QString& username)
 }
 
 void Core::setAvatar(uint8_t format, const QByteArray& data)
-{
+{/*
     if (tox_set_avatar(tox, format, (uint8_t*)data.constData(), data.size()) != 0)
     {
         qWarning() << "Core: Failed to set self avatar";
@@ -1093,13 +1096,13 @@ void Core::setAvatar(uint8_t format, const QByteArray& data)
     // according to tox.h, we need not broadcast this ourselves, but initial testing indicated elsewise
     const uint32_t friendCount = tox_count_friendlist(tox);;
     for (unsigned i=0; i<friendCount; i++)
-        tox_send_avatar_info(tox, i);
+        tox_send_avatar_info(tox, i);*/
 }
 
 ToxID Core::getSelfId() const
 {
-    uint8_t friendAddress[TOX_FRIEND_ADDRESS_SIZE] = {0};
-    tox_get_address(tox, friendAddress);
+    uint8_t friendAddress[TOX_ADDRESS_SIZE] = {0};
+    tox_self_get_address(tox, friendAddress);
     return ToxID::fromString(CFriendAddress::toString(friendAddress));
 }
 
@@ -1116,20 +1119,23 @@ QPair<QByteArray, QByteArray> Core::getKeypair() const
     if (!tox)
         return keypair;
 
-    char buf[2*TOX_PUBLIC_KEY_SIZE];
-    tox_get_keys(tox, (uint8_t*)buf, (uint8_t*)buf+TOX_PUBLIC_KEY_SIZE);
-    keypair.first = QByteArray(buf, TOX_PUBLIC_KEY_SIZE);
-    keypair.second = QByteArray(buf+TOX_PUBLIC_KEY_SIZE, TOX_PUBLIC_KEY_SIZE);
+    char pk[TOX_PUBLIC_KEY_SIZE];
+    char sk[TOX_SECRET_KEY_SIZE];
+    tox_self_get_public_key(tox, (uint8_t*)pk);
+    tox_self_get_secret_key(tox, (uint8_t*)sk);
+
+    keypair.first = QByteArray(pk, TOX_PUBLIC_KEY_SIZE);
+    keypair.second = QByteArray(sk, TOX_SECRET_KEY_SIZE);
     return keypair;
 }
 
 QString Core::getStatusMessage() const
 {
     QString sname;
-    int size = tox_get_self_status_message_size(tox);
+    int size = tox_self_get_status_message_size(tox);
     uint8_t* name = new uint8_t[size];
-    if (tox_get_self_status_message(tox, name, size) == size)
-        sname = CString::toString(name, size);
+    tox_self_get_status_message(tox, name);
+    sname = CString::toString(name, size);
     delete[] name;
     return sname;
 }
@@ -1138,7 +1144,7 @@ void Core::setStatusMessage(const QString& message)
 {
     CString cMessage(message);
 
-    if (tox_set_status_message(tox, cMessage.data(), cMessage.size()) == -1) {
+    if (tox_self_set_status_message(tox, cMessage.data(), cMessage.size(), 0) == 0) {
         emit failedToSetStatusMessage(message);
     } else {
         saveConfiguration();
@@ -1148,28 +1154,25 @@ void Core::setStatusMessage(const QString& message)
 
 void Core::setStatus(Status status)
 {
-    TOX_USERSTATUS userstatus;
+    TOX_USER_STATUS userstatus;
     switch (status) {
         case Status::Online:
-            userstatus = TOX_USERSTATUS_NONE;
+            userstatus = TOX_USER_STATUS_NONE;
             break;
         case Status::Away:
-            userstatus = TOX_USERSTATUS_AWAY;
+            userstatus = TOX_USER_STATUS_AWAY;
             break;
         case Status::Busy:
-            userstatus = TOX_USERSTATUS_BUSY;
+            userstatus = TOX_USER_STATUS_BUSY;
             break;
         default:
-            userstatus = TOX_USERSTATUS_INVALID;
+            userstatus = TOX_USER_STATUS_NONE;
             break;
     }
 
-    if (tox_set_user_status(tox, userstatus) == 0) {
-        saveConfiguration();
-        emit statusSet(status);
-    } else {
-        emit failedToSetStatus(status);
-    }
+    tox_self_set_status(tox, userstatus);
+    saveConfiguration();
+    emit statusSet(status);
 }
 
 void Core::onFileTransferFinished(ToxFile file)
@@ -1214,14 +1217,14 @@ bool Core::loadConfiguration(QString path)
     qint64 fileSize = configurationFile.size();
     if (fileSize > 0) {
         QByteArray data = configurationFile.readAll();
-        int error = tox_load(tox, reinterpret_cast<uint8_t *>(data.data()), data.size());
+        int error = -1;//tox_load(tox, reinterpret_cast<uint8_t *>(data.data()), data.size()); //TODO
         if (error < 0)
         {
             qWarning() << "Core: tox_load failed with error "<< error;
         }
         else if (error == 1) // Encrypted data save
         {
-            if (!loadEncryptedSave(data))
+            //if (!loadEncryptedSave(data))
             {
                 configurationFile.close();
 
@@ -1328,29 +1331,29 @@ void Core::switchConfiguration(const QString& profile)
 
 void Core::loadFriends()
 {
-    const uint32_t friendCount = tox_count_friendlist(tox);
+    const uint32_t friendCount = tox_self_get_friend_list_size(tox);
     if (friendCount > 0) {
         // assuming there are not that many friends to fill up the whole stack
-        int32_t *ids = new int32_t[friendCount];
-        tox_get_friendlist(tox, ids, friendCount);
+        uint32_t *ids = new uint32_t[friendCount];
+        tox_self_get_friend_list(tox, ids);
         uint8_t clientId[TOX_PUBLIC_KEY_SIZE];
         for (int32_t i = 0; i < static_cast<int32_t>(friendCount); ++i) {
-            if (tox_get_client_id(tox, ids[i], clientId) == 0) {
+            if (tox_friend_get_public_key(tox, ids[i], clientId, 0)) {
                 emit friendAdded(ids[i], CUserId::toString(clientId));
 
-                const int nameSize = tox_get_name_size(tox, ids[i]);
+                const int nameSize = tox_friend_get_name_size(tox, ids[i], 0);
                 if (nameSize > 0) {
                     uint8_t *name = new uint8_t[nameSize];
-                    if (tox_get_name(tox, ids[i], name) == nameSize) {
+                    if (tox_friend_get_name(tox, ids[i], name, 0)) {
                         emit friendUsernameChanged(ids[i], CString::toString(name, nameSize));
                     }
                     delete[] name;
                 }
 
-                const int statusMessageSize = tox_get_status_message_size(tox, ids[i]);
+                const int statusMessageSize = tox_friend_get_status_message_size(tox, ids[i], 0);
                 if (statusMessageSize > 0) {
                     uint8_t *statusMessage = new uint8_t[statusMessageSize];
-                    if (tox_get_status_message(tox, ids[i], statusMessage, statusMessageSize) == statusMessageSize) {
+                    if (tox_friend_get_status_message(tox, ids[i], statusMessage, 0)) {
                         emit friendStatusMessageChanged(ids[i], CString::toString(statusMessage, statusMessageSize));
                     }
                     delete[] statusMessage;
@@ -1365,7 +1368,7 @@ void Core::loadFriends()
 }
 
 void Core::checkLastOnline(int friendId) {
-    const uint64_t lastOnline = tox_get_last_online(tox, friendId);
+    const uint64_t lastOnline = tox_friend_get_last_online(tox, friendId, 0);
     if (lastOnline > 0) {
         emit friendLastSeenChanged(friendId, QDateTime::fromTime_t(lastOnline));
     }
@@ -1491,7 +1494,7 @@ void Core::removeFileFromQueue(bool sendQueue, int friendId, int fileId)
 }
 
 void Core::sendAllFileData(Core *core, ToxFile* file)
-{
+{/*
     if (file->status == ToxFile::PAUSED)
     {
         file->sendTimer->start(5+TOX_FILE_INTERVAL);
@@ -1568,7 +1571,7 @@ void Core::sendAllFileData(Core *core, ToxFile* file)
         file->sendTimer = nullptr;
         tox_file_send_control(core->tox, file->friendId, 0, file->fileNum, TOX_FILECONTROL_FINISHED, nullptr, 0);
         //emit core->fileTransferFinished(*file);
-    }
+    }*/
 }
 
 void Core::groupInviteFriend(int friendId, int groupId)
@@ -1595,7 +1598,7 @@ void Core::createGroup(uint8_t type)
 bool Core::hasFriendWithAddress(const QString &addr) const
 {
     // Valid length check
-    if (addr.length() != (TOX_FRIEND_ADDRESS_SIZE * 2))
+    if (addr.length() != (TOX_ADDRESS_SIZE * 2))
     {
         return false;
     }
@@ -1613,11 +1616,11 @@ bool Core::hasFriendWithPublicKey(const QString &pubkey) const
     }
 
     bool found = false;
-    const uint32_t friendCount = tox_count_friendlist(tox);
+    const uint32_t friendCount = tox_self_get_friend_list_size(tox);
     if (friendCount > 0)
     {
-        int32_t *ids = new int32_t[friendCount];
-        tox_get_friendlist(tox, ids, friendCount);
+        uint32_t *ids = new uint32_t[friendCount];
+        tox_self_get_friend_list(tox, ids);
         for (int32_t i = 0; i < static_cast<int32_t>(friendCount); ++i)
         {
             // getFriendAddress may return either id (public key) or address
@@ -1641,7 +1644,7 @@ QString Core::getFriendAddress(int friendNumber) const
 {
     // If we don't know the full address of the client, return just the id, otherwise get the full address
     uint8_t rawid[TOX_PUBLIC_KEY_SIZE];
-    tox_get_client_id(tox, friendNumber, rawid);
+    tox_friend_get_public_key(tox, friendNumber, rawid, 0);
     QByteArray data((char*)rawid,TOX_PUBLIC_KEY_SIZE);
     QString id = data.toHex().toUpper();
 
@@ -1655,8 +1658,8 @@ QString Core::getFriendAddress(int friendNumber) const
 QString Core::getFriendUsername(int friendnumber) const
 {
     uint8_t name[TOX_MAX_NAME_LENGTH];
-    tox_get_name(tox, friendnumber, name);
-    return CString::toString(name, tox_get_name_size(tox, friendnumber));
+    tox_friend_get_name(tox, friendnumber, name, 0);
+    return CString::toString(name, tox_friend_get_name_size(tox, friendnumber, 0));
 }
 
 QList<CString> Core::splitMessage(const QString &message, int maxLen)
@@ -1693,14 +1696,14 @@ QString Core::getPeerName(const ToxID& id) const
     QString name;
     CUserId cid(id.toString());
 
-    int friendId = tox_get_friend_number(tox, (uint8_t*)cid.data());
+    int friendId = tox_friend_by_public_key(tox, (uint8_t*)cid.data(), 0);
     if (friendId < 0)
     {
         qWarning() << "Core::getPeerName: No such peer "+id.toString();
         return name;
     }
 
-    const int nameSize = tox_get_name_size(tox, friendId);
+    const int nameSize = tox_friend_get_name_size(tox, friendId, 0);
     if (nameSize <= 0)
     {
         //qDebug() << "Core::getPeerName: Can't get name of friend "+QString().setNum(friendId)+" ("+id.toString()+")";
@@ -1708,7 +1711,7 @@ QString Core::getPeerName(const ToxID& id) const
     }
 
     uint8_t* cname = new uint8_t[nameSize<TOX_MAX_NAME_LENGTH ? TOX_MAX_NAME_LENGTH : nameSize];
-    if (tox_get_name(tox, friendId, cname) != nameSize)
+    if (tox_friend_get_name(tox, friendId, cname, 0) == 0)
     {
         qWarning() << "Core::getPeerName: Can't get name of friend "+QString().setNum(friendId)+" ("+id.toString()+")";
         delete[] cname;
@@ -1729,7 +1732,7 @@ void Core::setNospam(uint32_t nospam)
 {
     uint8_t *nspm = reinterpret_cast<uint8_t*>(&nospam);
     std::reverse(nspm, nspm + 4);
-    tox_set_nospam(tox, nospam);
+    tox_self_set_nospam(tox, nospam);
 }
 
 void Core::resetCallSources()

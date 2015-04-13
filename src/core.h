@@ -37,6 +37,9 @@ class VideoSource;
 class AudioFilterer;
 #endif
 
+#define TOX_AVATAR_MAX_DATA_LENGTH (1 << 16)
+#define TOX_AVATAR_FORMAT_PNG 0
+
 class Core : public QObject
 {
     Q_OBJECT
@@ -225,14 +228,13 @@ signals:
     void videoFrameReceived(vpx_image* frame);
 
 private:
-    static void onFriendRequest(Tox* tox, const uint8_t* cUserId, const uint8_t* cMessage, uint16_t cMessageSize, void* core);
-    static void onFriendMessage(Tox* tox, int friendId, const uint8_t* cMessage, uint16_t cMessageSize, void* core);
-    static void onFriendNameChange(Tox* tox, int friendId, const uint8_t* cName, uint16_t cNameSize, void* core);
-    static void onFriendTypingChange(Tox* tox, int friendId, uint8_t isTyping, void* core);
-    static void onStatusMessageChanged(Tox* tox, int friendId, const uint8_t* cMessage, uint16_t cMessageSize, void* core);
-    static void onUserStatusChanged(Tox* tox, int friendId, uint8_t userstatus, void* core);
-    static void onConnectionStatusChanged(Tox* tox, int friendId, uint8_t status, void* core);
-    static void onAction(Tox* tox, int friendId, const uint8_t* cMessage, uint16_t cMessageSize, void* core);
+    static void onFriendRequest(Tox* tox, const uint8_t* cUserId, const uint8_t* cMessage, size_t cMessageSize, void* core);
+    static void onFriendMessage(Tox* tox, uint32_t friendId, TOX_MESSAGE_TYPE type, const uint8_t* cMessage, size_t cMessageSize, void* core);
+    static void onFriendNameChange(Tox* tox, uint32_t friendId, const uint8_t* cName, size_t cNameSize, void* core);
+    static void onFriendTypingChange(Tox* tox, uint32_t friendId, bool isTyping, void* core);
+    static void onStatusMessageChanged(Tox* tox, uint32_t friendId, const uint8_t* cMessage, size_t cMessageSize, void* core);
+    static void onUserStatusChanged(Tox* tox, uint32_t friendId, TOX_USER_STATUS userstatus, void* core);
+    static void onConnectionStatusChanged(Tox* tox, uint32_t friendId, TOX_CONNECTION status, void* core);
     static void onGroupAction(Tox* tox, int groupnumber, int peernumber, const uint8_t * action, uint16_t length, void* core);
     static void onGroupInvite(Tox *tox, int friendnumber, uint8_t type, const uint8_t *data, uint16_t length,void *userdata);
     static void onGroupMessage(Tox *tox, int groupnumber, int friendgroupnumber, const uint8_t * message, uint16_t length, void *userdata);
@@ -245,7 +247,7 @@ private:
     static void onFileDataCallback(Tox *tox, int32_t friendnumber, uint8_t filenumber, const uint8_t *data, uint16_t length, void *userdata);
     static void onAvatarInfoCallback(Tox* tox, int32_t friendnumber, uint8_t format, uint8_t *hash, void *userdata);
     static void onAvatarDataCallback(Tox* tox, int32_t friendnumber, uint8_t format, uint8_t *hash, uint8_t *data, uint32_t datalen, void *userdata);
-    static void onReadReceiptCallback(Tox *tox, int32_t friendnumber, uint32_t receipt, void *core);
+    static void onReadReceiptCallback(Tox *tox, uint32_t friendnumber, uint32_t receipt, void *core);
 
     static void onAvInvite(void* toxav, int32_t call_index, void* core);
     static void onAvStart(void* toxav, int32_t call_index, void* core);
