@@ -290,6 +290,7 @@ private slots:
 private:
     Tox* tox;
     ToxAv* toxav;
+    Tox_Options options;
     QTimer *toxTimer, *fileTimer; //, *saveTimer;
     Camera* camera;
     QString loadPath; // meaningless after start() is called

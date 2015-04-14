@@ -24,7 +24,7 @@
 #include <tox/tox.h>
 #include <tox/toxdns.h>
 
-#define TOX_ID_LENGTH 2*TOX_FRIEND_ADDRESS_SIZE
+#define TOX_ID_LENGTH 2*TOX_ADDRESS_SIZE
 
 const ToxDNS::tox3_server ToxDNS::pinnedServers[]
 {
@@ -201,7 +201,7 @@ QString ToxDNS::queryTox3(const tox3_server& server, const QString &record, bool
 
     idx += 3;
     id = entry.mid(idx).toUtf8();
-    uint8_t toxId[TOX_FRIEND_ADDRESS_SIZE];
+    uint8_t toxId[TOX_ADDRESS_SIZE];
     toxIdSize = tox_decrypt_dns3_TXT(tox_dns3, toxId, (uint8_t*)id.data(), id.size(), request_id);
     if (toxIdSize < 0) // We can always fallback on tox1 if toxdns3 fails
     {

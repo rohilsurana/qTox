@@ -1217,8 +1217,9 @@ bool Core::loadConfiguration(QString path)
     qint64 fileSize = configurationFile.size();
     if (fileSize > 0) {
         QByteArray data = configurationFile.readAll();
-        int error = -1;//tox_load(tox, reinterpret_cast<uint8_t *>(data.data()), data.size()); //TODO
-        if (error < 0)
+        TOX_ERR_NEW error;
+        tox = tox_new(&options, reinterpret_cast<uint8_t *>(data.data()), data.size(), &error); //TODO
+        if (error != TOX_ERR_NEW::TOX_ERR_NEW_OK)
         {
             qWarning() << "Core: tox_load failed with error "<< error;
         }
