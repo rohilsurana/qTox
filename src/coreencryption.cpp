@@ -272,7 +272,7 @@ void Core::checkEncryptedHistory()
 }
 
 void Core::saveConfiguration(const QString& path)
-{/*
+{
     if (QThread::currentThread() != coreThread)
         return (void) QMetaObject::invokeMethod(this, "saveConfiguration", Q_ARG(const QString&, path));
 
@@ -290,41 +290,44 @@ void Core::saveConfiguration(const QString& path)
 
     qDebug() << "Core: writing tox_save to " << path;
 
-    uint32_t fileSize; bool encrypt = Settings::getInstance().getEncryptTox();
+    uint32_t fileSize;
+    bool encrypt = Settings::getInstance().getEncryptTox();
     if (encrypt)
-        fileSize = tox_encrypted_size(tox);
+        qDebug() << "Core::saveConfiguration: Encrytion is not available as of now";
+//        fileSize = tox_encrypted_size(tox);
     else
-        fileSize = tox_size(tox);
+        fileSize = tox_get_savedata_size(tox);
 
     if (fileSize > 0 && fileSize <= std::numeric_limits<int32_t>::max()) {
         uint8_t *data = new uint8_t[fileSize];
 
         if (encrypt)
         {
-            if (!pwsaltedkeys[ptMain])
-            {
-                // probably zero chance event
-                GUI::showWarning(tr("NO Password"), tr("Local file encryption is enabled, but there is no password! It will be disabled."));
-                Settings::getInstance().setEncryptTox(false);
-                tox_save(tox, data);
-            }
-            else
-            {
-                int ret = tox_encrypted_key_save(tox, data, pwsaltedkeys[ptMain]);
-                if (ret == -1)
-                {
-                    qCritical() << "Core::saveConfiguration: encryption of save file failed!!!";
-                    return;
-                }
-            }
+            qDebug() << "Core::saveConfiguration: Encrytion is not available as of now";
+//            if (!pwsaltedkeys[ptMain])
+//            {
+//                // probably zero chance event
+//                GUI::showWarning(tr("NO Password"), tr("Local file encryption is enabled, but there is no password! It will be disabled."));
+//                Settings::getInstance().setEncryptTox(false);
+//                tox_save(tox, data);
+//            }
+//            else
+//            {
+//                int ret = tox_encrypted_key_save(tox, data, pwsaltedkeys[ptMain]);
+//                if (ret == -1)
+//                {
+//                    qCritical() << "Core::saveConfiguration: encryption of save file failed!!!";
+//                    return;
+//                }
+//            }
         }
         else
-            tox_save(tox, data);
+            tox_get_savedata(tox, data);
 
         configurationFile.write(reinterpret_cast<char *>(data), fileSize);
         configurationFile.commit();
         delete[] data;
     }
 
-    Settings::getInstance().save();*/
+    Settings::getInstance().save();
 }
