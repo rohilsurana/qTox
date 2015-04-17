@@ -242,6 +242,12 @@ private:
     static void onGroupTitleChange(Tox*, int groupnumber, int peernumber, const uint8_t* title, uint8_t len, void* _core);
     static void onFileSendRequestCallback(Tox *tox, int32_t friendnumber, uint8_t filenumber, uint64_t filesize,
                                           const uint8_t *filename, uint16_t filename_length, void *userdata);
+
+    static void onFileSendControlCallback(Tox* tox, uint32_t friendnumber, uint32_t filenumber,
+                                          TOX_FILE_CONTROL control_type, void *core);
+    static void onFileChunkRequestedCallback(Tox *tox, uint32_t friend_number, uint32_t file_number,
+                                             uint64_t position, size_t length, void *user_data);
+
     static void onFileControlCallback(Tox *tox, int32_t friendnumber, uint8_t receive_send, uint8_t filenumber,
                                       uint8_t control_type, const uint8_t *data, uint16_t length, void *core);
     static void onFileDataCallback(Tox *tox, int32_t friendnumber, uint8_t filenumber, const uint8_t *data, uint16_t length, void *userdata);
