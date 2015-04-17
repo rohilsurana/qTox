@@ -33,7 +33,7 @@
 #include <QThread>
 
 void Core::setPassword(QString& password, PasswordType passtype, uint8_t* salt)
-{
+{/*
     clearPassword(passtype);
     if (password.isEmpty())
         return;
@@ -46,18 +46,18 @@ void Core::setPassword(QString& password, PasswordType passtype, uint8_t* salt)
     else
         tox_derive_key_from_pass(str.data(), str.size(), pwsaltedkeys[passtype]);
 
-    password.clear();
+    password.clear();*/
 }
 
 #include <algorithm>
 void Core::useOtherPassword(PasswordType type)
-{
+{/*
     clearPassword(type);
     pwsaltedkeys[type] = new uint8_t[tox_pass_key_length()];
 
     PasswordType other = (type == ptMain) ? ptHistory : ptMain;
 
-    std::copy(pwsaltedkeys[other], pwsaltedkeys[other]+tox_pass_key_length(), pwsaltedkeys[type]);
+    std::copy(pwsaltedkeys[other], pwsaltedkeys[other]+tox_pass_key_length(), pwsaltedkeys[type]);*/
 }
 
 void Core::clearPassword(PasswordType passtype)
@@ -68,7 +68,7 @@ void Core::clearPassword(PasswordType passtype)
 
 // part of a hack, see core.h
 void Core::saveCurrentInformation()
-{
+{/*
     if (pwsaltedkeys[ptMain])
     {
         backupkeys[ptMain] = new uint8_t[tox_pass_key_length()];
@@ -79,11 +79,11 @@ void Core::saveCurrentInformation()
         backupkeys[ptHistory] = new uint8_t[tox_pass_key_length()];
         std::copy(pwsaltedkeys[ptHistory], pwsaltedkeys[ptHistory]+tox_pass_key_length(), backupkeys[ptHistory]);
     }
-    backupProfile = new QString(Settings::getInstance().getCurrentProfile());
+    backupProfile = new QString(Settings::getInstance().getCurrentProfile());*/
 }
 
 QString Core::loadOldInformation()
-{
+{/*
     QString out;
     if (backupProfile)
     {
@@ -100,11 +100,11 @@ QString Core::loadOldInformation()
     pwsaltedkeys[ptHistory] = backupkeys[ptHistory];
     backupkeys[ptMain]    = nullptr;
     backupkeys[ptHistory] = nullptr;
-    return out;
+    return out;*/
 }
 
 QByteArray Core::encryptData(const QByteArray& data, PasswordType passtype)
-{
+{/*
     if (!pwsaltedkeys[passtype])
         return QByteArray();
     uint8_t encrypted[data.size() + tox_pass_encryption_extra_length()];
@@ -113,11 +113,11 @@ QByteArray Core::encryptData(const QByteArray& data, PasswordType passtype)
         qWarning() << "Core::encryptData: encryption failed";
         return QByteArray();
     }
-    return QByteArray(reinterpret_cast<char*>(encrypted), data.size() + tox_pass_encryption_extra_length());
+    return QByteArray(reinterpret_cast<char*>(encrypted), data.size() + tox_pass_encryption_extra_length());*/
 }
 
 QByteArray Core::decryptData(const QByteArray& data, PasswordType passtype)
-{
+{/*
     if (!pwsaltedkeys[passtype])
         return QByteArray();
     int sz = data.size() - tox_pass_encryption_extra_length();
@@ -128,7 +128,7 @@ QByteArray Core::decryptData(const QByteArray& data, PasswordType passtype)
         qWarning() << "Core::decryptData: decryption failed";
         return QByteArray();
     }
-    return QByteArray(reinterpret_cast<char*>(decrypted), sz);
+    return QByteArray(reinterpret_cast<char*>(decrypted), sz);*/
 }
 
 bool Core::isPasswordSet(PasswordType passtype)
@@ -140,7 +140,7 @@ bool Core::isPasswordSet(PasswordType passtype)
 }
 
 QByteArray Core::getSaltFromFile(QString filename)
-{
+{/*
     QFile file(filename);
     if (!file.open(QIODevice::ReadOnly))
     {
@@ -160,11 +160,11 @@ QByteArray Core::getSaltFromFile(QString filename)
 
     QByteArray res = QByteArray::fromRawData(reinterpret_cast<const char*>(salt), tox_pass_salt_length());
     delete[] salt;
-    return res;
+    return res;*/
 }
 
 bool Core::loadEncryptedSave(QByteArray& data)
-{
+{/*
     if (!Settings::getInstance().getEncryptTox())
         GUI::showWarning(tr("Encryption error"), tr("The .tox file is encrypted, but encryption was not checked, continuing regardless."));
 
@@ -206,11 +206,11 @@ bool Core::loadEncryptedSave(QByteArray& data)
     } while (error != 0);
 
     Settings::getInstance().setEncryptTox(true);
-    return true;
+    return true;*/
 }
 
 void Core::checkEncryptedHistory()
-{
+{/*
     QString path = HistoryKeeper::getHistoryPath();
     bool exists = QFile::exists(path);
 
@@ -268,7 +268,7 @@ void Core::checkEncryptedHistory()
 
         error = exists && !HistoryKeeper::checkPassword();
         dialogtxt = a + "\n" + c + "\n" + b;
-    } while (error);
+    } while (error);*/
 }
 
 void Core::saveConfiguration(const QString& path)
@@ -290,36 +290,39 @@ void Core::saveConfiguration(const QString& path)
 
     qDebug() << "Core: writing tox_save to " << path;
 
-    uint32_t fileSize; bool encrypt = Settings::getInstance().getEncryptTox();
+    uint32_t fileSize;
+    bool encrypt = Settings::getInstance().getEncryptTox();
     if (encrypt)
-        fileSize = tox_encrypted_size(tox);
+        qDebug() << "Core::saveConfiguration: Encrytion is not available as of now";
+//        fileSize = tox_encrypted_size(tox);
     else
-        fileSize = tox_size(tox);
+        fileSize = tox_get_savedata_size(tox);
 
     if (fileSize > 0 && fileSize <= std::numeric_limits<int32_t>::max()) {
         uint8_t *data = new uint8_t[fileSize];
 
         if (encrypt)
         {
-            if (!pwsaltedkeys[ptMain])
-            {
-                // probably zero chance event
-                GUI::showWarning(tr("NO Password"), tr("Local file encryption is enabled, but there is no password! It will be disabled."));
-                Settings::getInstance().setEncryptTox(false);
-                tox_save(tox, data);
-            }
-            else
-            {
-                int ret = tox_encrypted_key_save(tox, data, pwsaltedkeys[ptMain]);
-                if (ret == -1)
-                {
-                    qCritical() << "Core::saveConfiguration: encryption of save file failed!!!";
-                    return;
-                }
-            }
+            qDebug() << "Core::saveConfiguration: Encrytion is not available as of now";
+//            if (!pwsaltedkeys[ptMain])
+//            {
+//                // probably zero chance event
+//                GUI::showWarning(tr("NO Password"), tr("Local file encryption is enabled, but there is no password! It will be disabled."));
+//                Settings::getInstance().setEncryptTox(false);
+//                tox_save(tox, data);
+//            }
+//            else
+//            {
+//                int ret = tox_encrypted_key_save(tox, data, pwsaltedkeys[ptMain]);
+//                if (ret == -1)
+//                {
+//                    qCritical() << "Core::saveConfiguration: encryption of save file failed!!!";
+//                    return;
+//                }
+//            }
         }
         else
-            tox_save(tox, data);
+            tox_get_savedata(tox, data);
 
         configurationFile.write(reinterpret_cast<char *>(data), fileSize);
         configurationFile.commit();
