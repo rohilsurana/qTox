@@ -21,6 +21,7 @@
 #include "src/widget/toxuri.h"
 #include "src/widget/toxsave.h"
 #include "src/autoupdate.h"
+#include "src/profilelocker.h"
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDateTime>
@@ -81,6 +82,8 @@ int main(int argc, char *argv[])
 #ifdef HIGH_DPI
     a.setAttribute(Qt::AA_UseHighDpiPixmaps, true);
 #endif
+
+    qsrand(time(0));
 
     // Process arguments
     QCommandLineParser parser;
@@ -179,15 +182,17 @@ int main(int argc, char *argv[])
             sudoprocess->start(sudo); //Where the magic actually happens, safety checks ^
             sudoprocess->waitForFinished();
 
-            if (old_app.removeRecursively()) { //We've just deleted the running program
+            if (old_app.removeRecursively()) //We've just deleted the running program
+            {
                 qDebug() << "OS X: Cleaned up old directory";
-            } else {
+            }
+            else
+            {
                 qDebug() << "OS X: This should never happen, the directory failed to delete";
             }
 
-            if (fork() != 0) { //Forking is required otherwise it won't actually cleanly launch
+            if (fork() != 0) //Forking is required otherwise it won't actually cleanly launch
                 return EXIT_UPDATE_MACX;
-            }
 
             qtoxprocess->start(qtox);
 
@@ -212,6 +217,13 @@ int main(int argc, char *argv[])
     ipc.registerEventHandler("uri", &toxURIEventHandler);
     ipc.registerEventHandler("save", &toxSaveEventHandler);
     ipc.registerEventHandler("activate", &toxActivateEventHandler);
+
+    // If we're the IPC owner and we just started, then
+    // either we're the only running instance or any other instance
+    // is already so frozen it lost ownership.
+    // It's safe to remove any potential stale locks in this situation.
+    if (ipc.isCurrentOwner())
+        ProfileLocker::clearAllLocks();
 
     if (parser.positionalArguments().size() > 0)
     {
@@ -254,11 +266,12 @@ int main(int argc, char *argv[])
             return EXIT_FAILURE;
         }
     }
-    else if (!ipc.isCurrentOwner())
+    else if (!ipc.isCurrentOwner() && !parser.isSet("p"))
     {
         uint32_t dest = 0;
         if (parser.isSet("p"))
             dest = Settings::getInstance().getCurrentProfileId();
+
         time_t event = ipc.postEvent("activate", QByteArray(), dest);
         if (ipc.waitUntilAccepted(event, 2))
         {

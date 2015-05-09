@@ -19,7 +19,7 @@
    was greatly simplified for use in qTox. */
 
 #include "tabcompleter.h"
-#include "src/core.h"
+#include "src/core/core.h"
 #include "src/group.h"
 #include "src/widget/tool/chattextedit.h"
 #include <QRegExp>
@@ -49,13 +49,15 @@ void TabCompleter::buildCompletionList()
     nextCompletion = completionMap.begin();
 
     // split the string on the given RE (not chars, nums or braces/brackets) and take the last section
-    QString tabAbbrev = msgEdit->toPlainText().left(msgEdit->textCursor().position()).section(QRegExp("[^\\w\\d-_\\[\\]{}|`^.\\\\]"), -1, -1);
+    QString tabAbbrev = msgEdit->toPlainText().left(msgEdit->textCursor().position()).section(QRegExp("[^\\w\\d:--_\\[\\]{}|`^.\\\\]"), -1, -1);
     // that section is then used as the completion regex
     QRegExp regex(QString("^[-_\\[\\]{}|`^.\\\\]*").append(QRegExp::escape(tabAbbrev)), Qt::CaseInsensitive);
 
     for (auto name : group->getPeerList())
+    {
         if (regex.indexIn(name) > -1)
             completionMap[name.toLower()] = name;
+    }
 
     nextCompletion = completionMap.begin();
     lastCompletionLength = tabAbbrev.length();
@@ -64,12 +66,14 @@ void TabCompleter::buildCompletionList()
 
 void TabCompleter::complete()
 {
-    if (!enabled) {
+    if (!enabled)
+    {
         buildCompletionList();
         enabled = true;
     }
 
-    if (nextCompletion != completionMap.end()) {
+    if (nextCompletion != completionMap.end())
+    {
         // clear previous completion
         auto cur = msgEdit->textCursor();
         cur.setPosition(cur.selectionEnd());
@@ -85,13 +89,16 @@ void TabCompleter::complete()
         nextCompletion++;
 
         // we're completing the first word of the line
-        if (msgEdit->textCursor().position() == lastCompletionLength) {
+        if (msgEdit->textCursor().position() == lastCompletionLength)
+        {
             msgEdit->insertPlainText(nickSuffix);
             lastCompletionLength += nickSuffix.length();
         }
     }
-    else { // we're at the end of the list -> start over again
-        if (!completionMap.isEmpty()) {
+    else
+    { // we're at the end of the list -> start over again
+        if (!completionMap.isEmpty())
+        {
             nextCompletion = completionMap.begin();
             complete();
         }

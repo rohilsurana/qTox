@@ -37,12 +37,14 @@ CameraWorker::~CameraWorker()
 
 void CameraWorker::onStart()
 {
-    clock = new QTimer(this);
-    clock->setSingleShot(false);
-    clock->setInterval(1000/60);
+    if (!clock)
+    {
+        clock = new QTimer(this);
+        clock->setSingleShot(false);
+        clock->setInterval(1000/60);
 
-    connect(clock, &QTimer::timeout, this, &CameraWorker::doWork);
-
+        connect(clock, &QTimer::timeout, this, &CameraWorker::doWork);
+    }
     emit started();
 }
 
@@ -157,7 +159,7 @@ void CameraWorker::subscribe()
                 qDebug() << "CameraWorker:" << "OpenCV exception caught: " << e.what();
             }
 
-            if(!bSuccess)
+            if (!bSuccess)
             {
                 qDebug() << "CameraWorker: Could not open camera";
             }

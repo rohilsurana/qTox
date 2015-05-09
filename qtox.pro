@@ -345,6 +345,7 @@ contains(ENABLE_SYSTRAY_GTK_BACKEND, NO) {
         src/autoupdate.h \
         src/widget/callconfirmwidget.h \
         src/widget/systemtrayicon.h \
+        src/misc/qrwidget.h \
         src/widget/systemtrayicon_private.h
 
         SOURCES += \
@@ -404,15 +405,12 @@ contains(ENABLE_SYSTRAY_GTK_BACKEND, NO) {
         src/chatlog/documentcache.cpp \
         src/chatlog/pixmapcache.cpp \
         src/offlinemsgengine.cpp \
+        src/misc/qrwidget.cpp \
         src/widget/genericchatroomwidget.cpp
 }
 
 SOURCES += \
     src/audio.cpp \
-    src/core.cpp \
-    src/coreav.cpp \
-    src/coreencryption.cpp \
-    src/corestructs.cpp \
     src/historykeeper.cpp \
     src/main.cpp \
     src/nexus.cpp \
@@ -428,14 +426,27 @@ SOURCES += \
     src/video/videoframe.cpp \
     src/widget/gui.cpp \
     src/toxme.cpp \
-    src/misc/qrwidget.cpp
+    src/core/core.cpp \
+    src/core/coreav.cpp \
+    src/core/coreencryption.cpp \
+    src/core/corefile.cpp \
+    src/core/corestructs.cpp \
+    src/profilelocker.cpp \
+    src/avatarbroadcaster.cpp \
+    src/widget/tool/screenshotgrabber.cpp \
+    src/widget/tool/screengrabberchooserrectitem.cpp \
+    src/widget/tool/screengrabberoverlayitem.cpp \
+    src/widget/tool/toolboxgraphicsitem.cpp \
+    src/widget/tool/flyoutoverlaywidget.cpp
+
 
 HEADERS += \
     src/audio.h \
-    src/core.h \
-    src/corestructs.h \
-    src/coredefines.h \
-    src/coreav.h \
+    src/core/core.h \
+    src/core/coreav.h \
+    src/core/coredefines.h \
+    src/core/corefile.h \
+    src/core/corestructs.h \
     src/historykeeper.h \
     src/nexus.h \
     src/misc/cdata.h \
@@ -448,6 +459,13 @@ HEADERS += \
     src/video/cameraworker.h \
     src/video/videoframe.h \
     src/video/videosource.h \
+    src/video/netvideosource.h \
     src/widget/gui.h \
     src/toxme.h \
-    src/misc/qrwidget.h
+    src/profilelocker.h \
+    src/avatarbroadcaster.h \
+    src/widget/tool/screenshotgrabber.h \
+    src/widget/tool/screengrabberchooserrectitem.h \
+    src/widget/tool/screengrabberoverlayitem.h \
+    src/widget/tool/toolboxgraphicsitem.h \
+    src/widget/tool/flyoutoverlaywidget.h

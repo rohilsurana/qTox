@@ -21,7 +21,7 @@
 #include <QPoint>
 #include <QDateTime>
 #include <QMenu>
-#include "src/corestructs.h"
+#include "src/core/corestructs.h"
 #include "src/chatlog/chatmessage.h"
 
 // Spacing in px inserted when the author of the last message changes
@@ -36,6 +36,7 @@ class ChatLog;
 class MaskablePixmapWidget;
 class Widget;
 struct ToxID;
+class FlyoutOverlayWidget;
 
 namespace Ui {
     class MainWindow;
@@ -59,9 +60,10 @@ public:
 
     ChatLog* getChatLog() const;
 
+    bool eventFilter(QObject* object, QEvent* event);
 signals:
-    void sendMessage(int, QString);
-    void sendAction(int, QString);
+    void sendMessage(uint32_t, QString);
+    void sendAction(uint32_t, QString);
     void chatAreaCleared();
 
 public slots:
@@ -76,21 +78,26 @@ protected slots:
     void clearChatArea(bool);
     void clearChatArea();
     void onSelectAllClicked();
-    void previousContact();
-    void nextContact();
+    void showFileMenu();
+    void hideFileMenu();
 
 protected:
     QString resolveToxID(const ToxID &id);
     void insertChatMessage(ChatMessage::Ptr msg);
+    void hideEvent(QHideEvent* event);
+    void resizeEvent(QResizeEvent* event);
+    void adjustFileMenuPosition();
 
     ToxID previousId;
+    QDateTime prevMsgDateTime;
     Widget *parent;
     QMenu menu;
     int curRow;
     CroppingLabel *nameLabel;
     MaskablePixmapWidget *avatar;
     QWidget *headWidget;
-    QPushButton *fileButton, *emoteButton, *callButton, *videoButton, *volButton, *micButton;
+    QPushButton *fileButton, *screenshotButton, *emoteButton, *callButton, *videoButton, *volButton, *micButton;
+    FlyoutOverlayWidget *fileFlyout;
     QVBoxLayout *headTextLayout;
     ChatTextEdit *msgEdit;
     QPushButton *sendButton;
